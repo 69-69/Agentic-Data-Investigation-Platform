@@ -1,0 +1,836 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Experience Service API",
+    "version": "1.0.0",
+    "description": "Stable frontend-facing REST boundary. Synchronous local portfolio execution; no durable job queue. Health is liveness, not dependency readiness."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/api/v1/investigations": {
+      "post": {
+        "operationId": "createInvestigation",
+        "summary": "Run a bounded synchronous investigation",
+        "description": "POST waits for Python (60 second workflow budget; 65 second Java deadline by default). Terminal investigations, including partial/failed, return 201 with a Location for GET. No retries or idempotency guarantees. A timeout may leave an unknown remote outcome. 202 is reserved for an agent that actually reports pending/running; the bundled Python implementation is synchronous.",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional UUID; invalid values are replaced."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "INVALID_REQUEST: invalid body or UUID",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "HTTP_405: unsupported method",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "HTTP_415: unsupported media type",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: sanitized local failure",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AGENT_BAD_RESPONSE: invalid downstream status, payload or provenance",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AGENT_UNAVAILABLE: connection failure, downstream 429 or 503",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "AGENT_TIMEOUT: connect/read/deadline timeout or downstream 504",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Investigation created; inspect status and retrieve result",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Relative URL for the created investigation"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Created"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Compatibility: agent reports active work; GET may poll",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Relative URL for the created investigation"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Created"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/investigations/{id}": {
+      "get": {
+        "operationId": "getInvestigation",
+        "summary": "Retrieve agent-owned retained result",
+        "description": "Returns 200 even when investigation status is failed; error then contains normalized INVESTIGATION_FAILED. Detailed Python state/provider errors never enter the public contract.",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional UUID; invalid values are replaced."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retained completed, partial, failed or active investigation",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST: invalid body or UUID",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "INVESTIGATION_NOT_FOUND: missing, expired or lost result",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "HTTP_405: unsupported method",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "HTTP_415: unsupported media type",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: sanitized local failure",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AGENT_BAD_RESPONSE: invalid downstream status, payload or provenance",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AGENT_UNAVAILABLE: connection failure, downstream 429 or 503",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "AGENT_TIMEOUT: connect/read/deadline timeout or downstream 504",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional UUID; invalid values are replaced."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liveness independent of Python/database/model",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "Request correlation UUID; generated when absent or invalid.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateRequest": {
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Trimmed and nonblank; unknown properties rejected."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Created": {
+        "type": "object",
+        "required": [
+          "investigationId",
+          "status",
+          "question",
+          "createdAt"
+        ],
+        "properties": {
+          "investigationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partial",
+              "failed"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Finding": {
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "evidenceIds",
+          "title",
+          "confidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "Evidence": {
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "sqlQueryId",
+          "columns",
+          "rows",
+          "type",
+          "query",
+          "rowCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sqlQueryId": {
+            "type": "string"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "array",
+              "items": {}
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sql_result"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "rowCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "SqlQuery": {
+        "type": "object",
+        "required": [
+          "id",
+          "sql",
+          "rowCount",
+          "truncated"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "rowCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ToolExecution": {
+        "type": "object",
+        "required": [
+          "id",
+          "toolName",
+          "status",
+          "startedAt",
+          "completedAt",
+          "durationMs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "correlationId"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "service"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP"
+            ]
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "experience-service"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Result": {
+        "type": "object",
+        "required": [
+          "investigationId",
+          "status",
+          "question",
+          "summary",
+          "findings",
+          "evidence",
+          "sqlQueries",
+          "toolExecutions",
+          "createdAt",
+          "completedAt",
+          "error",
+          "probableRootCause",
+          "confidence"
+        ],
+        "properties": {
+          "investigationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partial",
+              "failed"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          },
+          "sqlQueries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SqlQuery"
+            }
+          },
+          "toolExecutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolExecution"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "probableRootCause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "dataset_version": "synthetic-v1",
+  "end_exclusive_utc": "2026-07-27T00:00:00+00:00",
+  "rows": {
+    "customers": 400,
+    "data_quality_events": 4,
+    "deployments": 3,
+    "pipeline_runs": 56,
+    "transactions": 10560
+  },
+  "seed": 20260601,
+  "sha256": "0896648fbf00cd34bd3fa62b031dd4e4b0297eaef2b1b0dcc3f03f275f47d29d",
+  "start_inclusive_utc": "2026-06-01T00:00:00+00:00"
+}

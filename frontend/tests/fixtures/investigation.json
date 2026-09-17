@@ -1,0 +1,126 @@
+{
+  "investigationId": "23efde19-5739-4d01-8e11-ab8464c09fc3",
+  "status": "completed",
+  "question": "Why did transaction volume decline last week?",
+  "summary": "Synthetic development investigation using fixed demonstration windows. Ingested volume changed from 1400 to 700; decline 50.0%. Rejected inputs changed from 14 to 714 (+700). Ingestion release 2.4.0 occurred at 2026-06-14T23:45:00+00:00; timing alone is not causal proof. Probable explanation: Increased ingestion rejections are a probable contributor to missing volume. The deployment is temporally associated, not proven causal.",
+  "findings": [
+    {
+      "id": "f1",
+      "description": "Ingested volume changed from 1400 to 700; decline 50.0%.",
+      "evidenceIds": ["e1"],
+      "title": "Transaction volume comparison",
+      "confidence": 0.9
+    },
+    {
+      "id": "f2",
+      "description": "Rejected inputs changed from 14 to 714 (+700).",
+      "evidenceIds": ["e2"],
+      "title": "Pipeline rejection comparison",
+      "confidence": 0.9
+    },
+    {
+      "id": "f3",
+      "description": "Ingestion release 2.4.0 occurred at 2026-06-14T23:45:00+00:00; timing alone is not causal proof.",
+      "evidenceIds": ["e3"],
+      "title": "Deployment timing",
+      "confidence": 0.9
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "description": "Query returned 2 rows.",
+      "sqlQueryId": "s1",
+      "columns": ["week", "volume"],
+      "rows": [
+        ["2026-06-08", 1400],
+        ["2026-06-15", 700]
+      ],
+      "type": "sql_result",
+      "query": "SELECT * FROM (SELECT CASE WHEN transaction_date >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END AS week, COUNT(*) AS volume FROM analytics.transactions WHERE transaction_date >= '2026-06-08' AND transaction_date < '2026-06-22' GROUP BY CASE WHEN transaction_date >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END ORDER BY week NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 2
+    },
+    {
+      "id": "e2",
+      "description": "Query returned 2 rows.",
+      "sqlQueryId": "s2",
+      "columns": ["week", "rejected"],
+      "rows": [
+        ["2026-06-08", 14],
+        ["2026-06-15", 714]
+      ],
+      "type": "sql_result",
+      "query": "SELECT * FROM (SELECT CASE WHEN started_at >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END AS week, SUM(records_rejected) AS rejected FROM analytics.pipeline_runs WHERE started_at >= '2026-06-08' AND started_at < '2026-06-22' GROUP BY CASE WHEN started_at >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END ORDER BY week NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 2
+    },
+    {
+      "id": "e3",
+      "description": "Query returned 1 rows.",
+      "sqlQueryId": "s3",
+      "columns": ["service_name", "version", "deployed_at"],
+      "rows": [["transaction_ingestion", "2.4.0", "2026-06-14T23:45:00+00:00"]],
+      "type": "sql_result",
+      "query": "SELECT * FROM (SELECT service_name, version, deployed_at FROM analytics.deployments WHERE service_name = 'transaction_ingestion' AND deployed_at >= '2026-06-14' AND deployed_at < '2026-06-15' ORDER BY deployed_at NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 1
+    }
+  ],
+  "sqlQueries": [
+    {
+      "id": "s1",
+      "sql": "SELECT * FROM (SELECT CASE WHEN transaction_date >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END AS week, COUNT(*) AS volume FROM analytics.transactions WHERE transaction_date >= '2026-06-08' AND transaction_date < '2026-06-22' GROUP BY CASE WHEN transaction_date >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END ORDER BY week NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 2,
+      "truncated": false
+    },
+    {
+      "id": "s2",
+      "sql": "SELECT * FROM (SELECT CASE WHEN started_at >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END AS week, SUM(records_rejected) AS rejected FROM analytics.pipeline_runs WHERE started_at >= '2026-06-08' AND started_at < '2026-06-22' GROUP BY CASE WHEN started_at >= '2026-06-15' THEN '2026-06-15' ELSE '2026-06-08' END ORDER BY week NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 2,
+      "truncated": false
+    },
+    {
+      "id": "s3",
+      "sql": "SELECT * FROM (SELECT service_name, version, deployed_at FROM analytics.deployments WHERE service_name = 'transaction_ingestion' AND deployed_at >= '2026-06-14' AND deployed_at < '2026-06-15' ORDER BY deployed_at NULLS LAST) AS bounded_result LIMIT 101",
+      "rowCount": 1,
+      "truncated": false
+    }
+  ],
+  "toolExecutions": [
+    {
+      "id": "t1",
+      "toolName": "inspect_schema",
+      "status": "completed",
+      "startedAt": "2026-09-16T16:59:26.754814Z",
+      "completedAt": "2026-09-16T16:59:26.754961Z",
+      "durationMs": 0
+    },
+    {
+      "id": "t2",
+      "toolName": "execute_readonly_sql",
+      "status": "completed",
+      "startedAt": "2026-09-16T16:59:26.763629Z",
+      "completedAt": "2026-09-16T16:59:26.771107Z",
+      "durationMs": 7
+    },
+    {
+      "id": "t3",
+      "toolName": "execute_readonly_sql",
+      "status": "completed",
+      "startedAt": "2026-09-16T16:59:26.776716Z",
+      "completedAt": "2026-09-16T16:59:26.780178Z",
+      "durationMs": 3
+    },
+    {
+      "id": "t4",
+      "toolName": "execute_readonly_sql",
+      "status": "completed",
+      "startedAt": "2026-09-16T16:59:26.785351Z",
+      "completedAt": "2026-09-16T16:59:26.788487Z",
+      "durationMs": 3
+    }
+  ],
+  "createdAt": "2026-09-16T16:59:26.751274Z",
+  "completedAt": "2026-09-16T16:59:26.790623Z",
+  "error": null,
+  "probableRootCause": "Increased ingestion rejections are a probable contributor to missing volume. The deployment is temporally associated, not proven causal.",
+  "confidence": 0.65
+}

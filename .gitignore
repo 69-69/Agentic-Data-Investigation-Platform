@@ -1,0 +1,38 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# JavaScript
+node_modules/
+.next/
+dist/
+# Java
+target/
+*.class
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Editor and generated output
+.idea/
+.vscode/
+.DS_Store
+coverage/
+htmlcov/
+*.log
+
+# Editable Python package metadata and test coverage
+*.egg-info/
+.coverage
+
+# Frontend generated test/build artifacts
+*.tsbuildinfo
+/test-results/
+**/test-results/
+playwright-report/
