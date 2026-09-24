@@ -1,4 +1,5 @@
 # Agentic Data Investigation Platform
+### Agentic Data Investigation Platform | Java, Spring Boot, React, Python, LangChain/LangGraph, PostgreSQL
 
  Setup instructions: frontend, backend, and agent
 
